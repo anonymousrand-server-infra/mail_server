@@ -14,8 +14,9 @@ server {
         # only set these on first proxying "hop"!
         include conf.d/snippets/inbound_edge_forwarding_headers.func;
 
+        set $anubis_in_loc http://unix:${MAIL_SERVER_ANUBIS_IN_SCKT};
         include conf.d/snippets/anubis.func;
-        proxy_pass http://unix:${MAIL_SERVER_ANUBIS_IN_SCKT}; }
+    }
 
     ssl_certificate /etc/letsencrypt/live/$ssl_server_name/fullchain.pem; # managed by Certbot
     ssl_certificate_key /etc/letsencrypt/live/$ssl_server_name/privkey.pem; # managed by Certbot
