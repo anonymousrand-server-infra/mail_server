@@ -16,6 +16,7 @@ docker compose --profile "$DOCKER_DEFAULT_PROFILE" down
 # otherwise (e.g. if they were started by the root docker project), we do a project-agnostic restart
 # also, unfortunately this restarts the entire proxy stack since we `depend_on` it, and removing
 # the `depend_on`s seem to break things 3:
+# SYNC: containers and depended on containers!
 docker stop mail_server && docker rm -v mail_server
 docker stop mail_server_tachyon && docker rm -v mail_server_tachyon
 docker stop mail_server_anubis && docker rm -v mail_server_anubis
