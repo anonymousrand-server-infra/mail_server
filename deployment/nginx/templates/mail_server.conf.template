@@ -1,0 +1,66 @@
+# route `mail.memi.ng:443` to the webmail client
+
+# first send requests through anubis
+server {
+    listen 443 ssl; # managed by Certbot
+    # TODO set it up on mail.anonymousrand.xyz too?
+    server_name mail.memi.ng;
+
+    access_log /var/log/nginx/mail_server_access.log;
+    error_log /var/log/nginx/mail_server_error.log;
+
+    location / {
+        include conf.d/snippets/general_forwarding_headers.func;
+        # only set these on first proxying "hop"!
+        include conf.d/snippets/inbound_edge_forwarding_headers.func;
+
+        include conf.d/snippets/anubis.func;
+        proxy_pass http://unix:${MAIL_SERVER_ANUBIS_IN_SCKT}; }
+
+    ssl_certificate /etc/letsencrypt/live/$ssl_server_name/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/$ssl_server_name/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+
+    client_max_body_size 100M;
+}
+
+
+server {
+    listen unix:${MAIL_SERVER_ANUBIS_OUT_SCKT};
+    server_name mail.memi.ng;
+
+    location / {
+        include conf.d/snippets/general_forwarding_headers.func;
+
+        set $iocaine_upstream @root;
+        include conf.d/snippets/iocaine.func;
+    }
+
+    # finally send traffic that passed iocaine to the upstream
+    location @root {
+        include conf.d/snippets/general_forwarding_headers.func;
+
+        proxy_pass http://127.0.0.1:${TACHYON_PORT};
+        proxy_redirect off;
+        # for smoother webmail stream
+        proxy_buffering off;
+    }
+
+    client_max_body_size 100M;
+}
+
+
+# redirect HTTP requests to HTTPS
+server {
+    listen 80;
+    server_name mail.memi.ng;
+
+    if ($host = mail.memi.ng) {
+        return 301 https://$host$request_uri;
+    } # managed by Certbot
+
+    client_max_body_size 100M;
+
+    return 404; # managed by Certbot
+}

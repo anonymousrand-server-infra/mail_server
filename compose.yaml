@@ -1,31 +1,112 @@
+include:
+  - ${PATH_TO_ROOT_DOCKER_PROJ:?}/${PATH_FROM_ROOT_TO_NGINX:?}/compose.yaml
+  - ${PATH_TO_ROOT_DOCKER_PROJ:?}/${PATH_FROM_ROOT_TO_IOCAINE:?}/compose.yaml
+  - ./deployment/anubis/compose.yaml
+
 services:
-  mailserver:
+  mail_server:
+    container_name: mail_server
+    profiles:
+      - ${DOCKER_DEFAULT_PROFILE:?}
     image: ghcr.io/docker-mailserver/docker-mailserver:latest
-    container_name: mailserver
-    # Provide the FQDN of your mail server here (Your DNS MX record should point to this value)
-    hostname: mail.example.com
-    env_file: mailserver.env
-    # More information about the mail-server ports:
-    # https://docker-mailserver.github.io/docker-mailserver/latest/config/security/understanding-the-ports/
-    # To avoid conflicts with yaml base-60 float, DO NOT remove the quotation marks.
+    # provide the fqdn of your mail server here (your dns mx record should point to this value)
+    hostname: mail.memi.ng
+    restart: unless-stopped
+    user: ${DOCKER_ROOT_USER:?}
     ports:
-      - "25:25"    # SMTP  (explicit TLS => STARTTLS, Authentication is DISABLED => use port 465/587 instead)
-      - "143:143"  # IMAP4 (explicit TLS => STARTTLS)
-      - "465:465"  # ESMTP (implicit TLS)
-      - "587:587"  # ESMTP (explicit TLS => STARTTLS)
-      - "993:993"  # IMAP4 (implicit TLS)
+      - "25:25"    # smtp  (explicit tls => starttls, NO auth; use port 465/587 for auth)
+      - "143:143"  # imap4 (explicit tls => starttls)
+      - "465:465"  # esmtp (implicit tls)
+      - "587:587"  # esmtp (explicit tls => starttls)
+      - "993:993"  # imap4 (implicit tls)
     volumes:
-      - ./docker-data/dms/mail-data/:/var/mail/
-      - ./docker-data/dms/mail-state/:/var/mail-state/
-      - ./docker-data/dms/mail-logs/:/var/log/mail/
-      - ./docker-data/dms/config/:/tmp/docker-mailserver/
-      - /etc/localtime:/etc/localtime:ro
-    restart: always
-    stop_grace_period: 1m
-    # Uncomment if using `ENABLE_FAIL2BAN=1`:
+      - type: bind
+        source: ./docker-data/dms/mail-data/
+        target: /var/mail/
+      - type: bind
+        source: ./docker-data/dms/mail-state/
+        target: /var/mail-state/
+      - type: bind
+        source: ./docker-data/dms/mail-logs/
+        target: /var/log/mail/
+      - type: bind
+        source: ./docker-data/dms/config/
+        target: /tmp/docker-mailserver/
+      - type: bind
+        source: /etc/localtime
+        target: /etc/localtime
+        read_only: true
+      - type: bind
+        source: /etc/letsencrypt
+        target: /etc/letsencrypt
+    env_file: mailserver.env
+    # uncomment if using `ENABLE_FAIL2BAN=1`:
     # cap_add:
     #   - NET_ADMIN
     healthcheck:
       test: "ss --listening --tcp | grep -P 'LISTEN.+:smtp' || exit 1"
+      interval: 1m
       timeout: 3s
-      retries: 0
+      retries: 3
+      start_period: 30s
+
+  #rainloop:
+  #  container_name: rainloop
+  #  image: nerzhul/rainloop-arm64
+  #  restart: unless-stopped
+  #  user: ${DOCKER_NONROOT_USER:?}
+  #  volumes:
+  #    # unix sockets
+  #    - type: volume
+  #      source: shared_sckts
+  #      target: /run/sockets/
+  #    # container-generated data
+  #    - type: bind
+  #      source: rainloop_data
+  #      target: /var/www/html/data/
+  #  healthcheck:
+  #    # todo: possible to make this listen on a socket??
+  #    test: ["CMD", "curl", "-I", "--unix-socket", ${RAINLOOP_SCKT:?}, "http://localhost/"]
+  #    interval: 1m
+  #    timeout: 3s
+  #    retries: 3
+  #    start_period: 5s
+  #  depends_on:
+  #    anubis:
+  #      condition: service_healthy
+  #    iocaine:
+  #      condition: service_started
+
+  mail_server_tachyon:
+    container_name: mail_server_tachyon
+    profiles:
+      - ${DOCKER_DEFAULT_PROFILE:?}
+    image: ghcr.io/kimusan/tachyon:latest
+    restart: unless-stopped
+    # currently root since tachyon seems to want to create a bunch of dirs under `/` like `/usr/`
+    user: ${DOCKER_ROOT_USER:?}
+    # i am not aware of a way to make this listen on a unix socket instead :(
+    ports:
+      - "${TACHYON_PORT:?}:8888"
+    volumes:
+      # container-generated data, including config from web ui
+      - type: volume
+        source: mail_server_tachyon_var
+        target: /var/lib/tachyon/
+    healthcheck:
+      #test: ["CMD", "curl", "-I", "--unix-socket", "${TACHYON_SCKT:?}", "http://localhost/"]
+      test: ["CMD", "curl", "-I", "http://localhost:${TACHYON_PORT:?}"]
+      interval: 1m
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      nginx:
+        condition: service_healthy
+      iocaine:
+        condition: service_started
+      mail_server_anubis:
+        condition: service_healthy
+
+volumes:
+  mail_server_tachyon_var:

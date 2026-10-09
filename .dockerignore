@@ -1,3 +1,4 @@
-*
-!target
-!VERSION
+./*
+!./deployment/
+!./target/
+!./VERSION

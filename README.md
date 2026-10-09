@@ -1,4 +1,6 @@
-# Docker Mailserver
+# docker mailserver
+
+this is mostly copy-pasted from the [docker mailserver](https://github.com/docker-mailserver/docker-mailserver) repo :3
 
 [![ci::status]][ci::github] [![docker::pulls]][docker::hub] [![documentation::badge]][documentation::web]
 
