@@ -3,7 +3,8 @@
 # first send requests through anubis
 server {
     listen 443 ssl; # managed by Certbot
-    # TODO set it up on mail.anonymousrand.xyz too?
+    listen [::]:443 ssl;
+    # TODO eventually set it up on mail.anonymousrand.xyz too?
     server_name mail.memi.ng;
 
     access_log /var/log/nginx/mail_server_access.log;
@@ -55,6 +56,7 @@ server {
 # redirect HTTP requests to HTTPS
 server {
     listen 80;
+    listen [::]:80;
     server_name mail.memi.ng;
 
     if ($host = mail.memi.ng) {
